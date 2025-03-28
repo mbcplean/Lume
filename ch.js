@@ -57,7 +57,7 @@ const firebaseHeaders = {
 
 // ==================== Utility Functions ==================== //
 
-// Generate a random alphanumeric string
+// Generate a random alphanumeric string (for email suffix, password, etc.)
 function generateRandomString(length) {
   const characters = 'abcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';
@@ -91,16 +91,36 @@ function randomSleep() {
   return sleep(delay);
 }
 
+// ==================== Username Handling ==================== //
+// Read the next available username from usernames.txt and remove it from the file.
+function getNextUsername() {
+  const filename = 'usernames.txt';
+  if (!fs.existsSync(filename)) {
+    throw new Error("usernames.txt not found");
+  }
+  const data = fs.readFileSync(filename, 'utf8')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0);
+  if (data.length === 0) {
+    throw new Error("No more usernames available in usernames.txt");
+  }
+  const nextUsername = data.shift();
+  fs.writeFileSync(filename, data.join('\n'));
+  return nextUsername;
+}
+
 // ==================== Account Generation & API Interaction ==================== //
 
-// Generate account data using referral code from code.txt
+// Generate account data using referral code from code.txt and a username from usernames.txt
 function generateAccountData() {
-  const randomStr = generateRandomString(8);
+  const username = getNextUsername();
+  const randomStr = generateRandomString(4); // Suffix for email/password uniqueness
   const referralCode = fs.readFileSync('code.txt', 'utf8').trim();
   return {
-    full_name: `user${randomStr}`,
-    username: `user${randomStr}`,
-    email: `user${randomStr}@gmail.com`,
+    full_name: username,
+    username: username,
+    email: `${username}${randomStr}@gmail.com`,
     password: `Pass${randomStr}123`,
     phone: `+628${Math.floor(100000000 + Math.random() * 900000000)}`,
     referral_code: referralCode,
@@ -264,7 +284,13 @@ async function createNewAccounts(numberToCreate) {
   while (created < numberToCreate) {
     const currentIndex = accounts.length + 1;
     logInfo(`Creating account ${currentIndex}...`);
-    const accountData = generateAccountData();
+    let accountData;
+    try {
+      accountData = generateAccountData();
+    } catch (e) {
+      logError(e.message);
+      break;
+    }
     const result = await registerAccount(accountData);
     if (result.success) {
       logSuccess(`Account ${currentIndex} created: ${accountData.email}`);
